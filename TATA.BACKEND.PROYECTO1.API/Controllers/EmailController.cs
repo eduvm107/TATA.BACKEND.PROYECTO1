@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using TATA.BACKEND.PROYECTO1.CORE.Core.DTOs;
@@ -15,6 +16,7 @@ namespace TATA.BACKEND.PROYECTO1.API.Controllers;
 /// </summary>
 [Route("api/email")]
 [ApiController]
+[Authorize]
 public class EmailController(
     IEmailAutomationService emailAutomationService,
     IEmailConfigService emailConfigService,
