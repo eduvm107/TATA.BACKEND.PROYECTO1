@@ -128,6 +128,12 @@ namespace TATA.BACKEND.PROYECTO1.API.Controllers
 
                 return CreatedAtAction(nameof(GetById), new { id = created.IdSolicitud }, created);
             }
+            catch (ArgumentException ex)
+            {
+                log.Warn($"Create: validación fallida - {ex.Message}");
+                await _logService.RegistrarLogAsync("WARN", "Validación fallida: Create Solicitud", ex.Message, userId);
+                return BadRequest(new { mensaje = ex.Message });
+            }
             catch (Exception ex)
             {
                 log.Error("Error inesperado durante Create", ex);
@@ -180,6 +186,12 @@ namespace TATA.BACKEND.PROYECTO1.API.Controllers
                     $"Solicitud {id} actualizada exitosamente", userId);
 
                 return Ok(updated);
+            }
+            catch (ArgumentException ex)
+            {
+                log.Warn($"Update: validación fallida - {ex.Message}");
+                await _logService.RegistrarLogAsync("WARN", "Validación fallida: Update Solicitud", ex.Message, userId);
+                return BadRequest(new { mensaje = ex.Message });
             }
             catch (Exception ex)
             {
