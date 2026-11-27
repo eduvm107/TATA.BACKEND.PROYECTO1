@@ -15,6 +15,7 @@ namespace TATA.BACKEND.PROYECTO1.CORE.Core.Services
         private readonly IUsuarioRepository _usuarioRepository;
         private readonly IPersonalRepository _personalRepository; // ⚠️ NUEVO
         private readonly IJWTService _jwtService;
+        private readonly ISessionService _sessionService;
         private readonly IEmailService _emailService;
         private readonly ILogger<UsuarioService> _logger;
         private readonly string _frontendBaseUrl;
@@ -23,6 +24,7 @@ namespace TATA.BACKEND.PROYECTO1.CORE.Core.Services
             IUsuarioRepository usuarioRepository,
             IPersonalRepository personalRepository, // ⚠️ NUEVO
             IJWTService jwtService,
+            ISessionService sessionService,
             IEmailService emailService,
             ILogger<UsuarioService> logger,
             IConfiguration configuration)
@@ -30,6 +32,7 @@ namespace TATA.BACKEND.PROYECTO1.CORE.Core.Services
             _usuarioRepository = usuarioRepository;
             _personalRepository = personalRepository; // ⚠️ NUEVO
             _jwtService = jwtService;
+            _sessionService = sessionService;
             _emailService = emailService;
             _logger = logger;
             _frontendBaseUrl = configuration["AppSettings:FrontendBaseUrl"] ?? "http://localhost:9000";
@@ -74,12 +77,19 @@ namespace TATA.BACKEND.PROYECTO1.CORE.Core.Services
             await _usuarioRepository.UpdateAsync(usuario);
 
             // Generar token JWT
-            var token = _jwtService.GenerateJWToken(usuario);
+            var (token, jti) = _jwtService.GenerateJWToken(usuario);
+
+            // Crear sesion + ticket de un solo uso en Redis (RFC seguridad de sesion)
+            var sesion = await _sessionService.CrearSesionAsync(usuario.IdUsuario, jti);
 
             // Construir respuesta completa con datos del usuario, rol y permisos
             var response = new SignInResponseDTO
             {
                 Token = token,
+                Ticket = sesion.Ticket,
+                SessionStartedAt = sesion.StartedAt,
+                SessionExpiresAt = sesion.ExpiresAt,
+                ServerTime = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
                 IdUsuario = usuario.IdUsuario,
                 Username = usuario.Username,
                 Email = usuario.PersonalNavigation?.CorreoCorporativo ?? string.Empty,

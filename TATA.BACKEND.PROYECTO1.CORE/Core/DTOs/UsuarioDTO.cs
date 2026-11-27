@@ -32,6 +32,18 @@ namespace TATA.BACKEND.PROYECTO1.CORE.Core.DTOs
         public string RolCodigo { get; set; } = string.Empty;
         public string RolNombre { get; set; } = string.Empty;
         public List<string> Permisos { get; set; } = new List<string>();
+
+        // Sesion en Redis (RFC seguridad de sesion): ticket de un solo uso (TTL 60s)
+        // y ventana de validez de la sesion, en epoch segundos UTC.
+        public string Ticket { get; set; } = string.Empty;
+        public long SessionStartedAt { get; set; }
+        public long SessionExpiresAt { get; set; }
+        public long ServerTime { get; set; }
+    }
+
+    public class ConfirmarSesionDTO
+    {
+        public string Ticket { get; set; } = string.Empty;
     }
     
     public class SignUpRequestDTO

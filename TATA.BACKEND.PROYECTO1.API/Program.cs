@@ -1,6 +1,7 @@
 using log4net; // Necesario para LogManager
 using log4net.Config; // Necesario para XmlConfigurator
 using Microsoft.EntityFrameworkCore;
+using StackExchange.Redis;
 using System.Reflection; // Necesario para Assembly
 using TATA.BACKEND.PROYECTO1.API.Services;
 using TATA.BACKEND.PROYECTO1.CORE.Core.Interfaces;
@@ -122,6 +123,16 @@ builder.Services.AddHostedService<AlertasSyncWorker>();
 // 3. Recálculo diario de SLA a medianoche (Sprint 3)
 builder.Services.AddHostedService<SlaDailyWorker>();
 
+
+// =====================================================
+// SESION EN REDIS (ticket + sesion por jti) - RFC seguridad de sesion
+// =====================================================
+builder.Services.AddSingleton<IConnectionMultiplexer>(_ =>
+{
+    var redisConnectionString = _configuration["Redis:ConnectionString"] ?? "localhost:6379";
+    return ConnectionMultiplexer.Connect(redisConnectionString);
+});
+builder.Services.AddTransient<ISessionService, RedisSessionService>();
 
 // Shared Infrastructure (JWT, etc.)
 builder.Services.AddSharedInfrastructure(_configuration);
