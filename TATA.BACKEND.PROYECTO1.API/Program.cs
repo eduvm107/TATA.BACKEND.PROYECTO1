@@ -129,8 +129,16 @@ builder.Services.AddHostedService<SlaDailyWorker>();
 // =====================================================
 builder.Services.AddSingleton<IConnectionMultiplexer>(_ =>
 {
-    var redisConnectionString = _configuration["Redis:ConnectionString"] ?? "localhost:6379";
-    return ConnectionMultiplexer.Connect(redisConnectionString);
+    var redisSettings = _configuration.GetSection("Redis").Get<RedisSettings>() ?? new RedisSettings();
+    var endpoint = string.IsNullOrWhiteSpace(redisSettings.ConnectionString)
+        ? "localhost:6379"
+        : redisSettings.ConnectionString;
+
+    var options = ConfigurationOptions.Parse(endpoint);
+    options.Ssl = redisSettings.Ssl; // true en AWS (ElastiCache con transit_encryption_enabled)
+    options.AbortOnConnectFail = false;
+
+    return ConnectionMultiplexer.Connect(options);
 });
 builder.Services.AddTransient<ISessionService, RedisSessionService>();
 
