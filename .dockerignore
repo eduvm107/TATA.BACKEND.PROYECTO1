@@ -1,0 +1,8 @@
+**/bin/
+**/obj/
+.git/
+.vs/
+*.md
+Scripts/
+Postman_Collection_SLA_Auth.json
+**/appsettings.Development.json
