@@ -31,7 +31,9 @@ public class JwtServiceTests
         PersonalNavigation = new Personal { IdPersonal = 15, CorreoCorporativo = "analista@empresa.pe", Nombres = "Ana", Apellidos = "Ríos" }
     };
 
-    private static string GenerarToken() => new JWTService(Options.Create(Settings)).GenerateJWToken(Usuario);
+    // GenerateJWToken ahora tambien devuelve el jti (RFC seguridad de sesion); las pruebas de
+    // firma/claims/vencimiento solo necesitan el token.
+    private static string GenerarToken() => new JWTService(Options.Create(Settings)).GenerateJWToken(Usuario).Token;
 
     private static ClaimsPrincipal Validar(string token, string secretKey) =>
         new JwtSecurityTokenHandler().ValidateToken(token, new TokenValidationParameters

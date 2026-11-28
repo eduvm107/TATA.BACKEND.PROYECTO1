@@ -26,7 +26,11 @@ public class ApiIntegrationTests : IClassFixture<ApiFactory>
         var response = await client.GetAsync("/health");
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        Assert.Equal("Healthy", await response.Content.ReadAsStringAsync());
+        // El endpoint es un MapGet manual (no el middleware AddHealthChecks), a proposito:
+        // una verificacion que consulte la base de datos podria hacer que ECS mate tareas
+        // por un fallo pasajero de RDS, riesgo sin beneficio para una demo en vivo.
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("healthy", body.GetProperty("status").GetString());
     }
 
     [Fact]

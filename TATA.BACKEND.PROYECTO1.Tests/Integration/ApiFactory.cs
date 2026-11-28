@@ -7,15 +7,20 @@ using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
+using StackExchange.Redis;
+using TATA.BACKEND.PROYECTO1.CORE.Core.Interfaces;
 using TATA.BACKEND.PROYECTO1.CORE.Infrastructure.Data;
+using TATA.BACKEND.PROYECTO1.Tests.Fakes;
 
 namespace TATA.BACKEND.PROYECTO1.Tests.Integration;
 
 /// <summary>
 /// Levanta la API completa en memoria (pipeline HTTP, autenticación JWT, controladores y DataSeeder).
-/// Cambia solo dos cosas respecto de producción:
+/// Cambia solo tres cosas respecto de producción:
 /// - SQL Server por una base de datos en memoria, nueva para cada fábrica.
 /// - Quita los workers de segundo plano (correos, alertas, recálculo diario) para que no corran durante las pruebas.
+/// - ISessionService real (Redis) por InMemorySessionService: las pruebas no dependen de tener
+///   Redis arriba. El codigo de produccion (Program.cs, RedisSessionService) no cambia.
 /// </summary>
 public class ApiFactory : WebApplicationFactory<Program>
 {
@@ -54,6 +59,12 @@ public class ApiFactory : WebApplicationFactory<Program>
             {
                 services.Remove(worker);
             }
+
+            // Sesion de login en memoria: sin esto, SignInAsync intenta hablar con Redis real
+            // (localhost:6379) y falla en el entorno de pruebas.
+            services.RemoveAll<ISessionService>();
+            services.RemoveAll<IConnectionMultiplexer>();
+            services.AddSingleton<ISessionService, InMemorySessionService>();
         });
     }
 }
