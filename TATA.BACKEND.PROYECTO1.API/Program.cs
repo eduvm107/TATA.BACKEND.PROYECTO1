@@ -1,6 +1,8 @@
 using log4net; // Necesario para LogManager
 using log4net.Config; // Necesario para XmlConfigurator
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
+using StackExchange.Redis;
 using System.Reflection; // Necesario para Assembly
 using TATA.BACKEND.PROYECTO1.API.Services;
 using TATA.BACKEND.PROYECTO1.CORE.Core.Interfaces;
@@ -123,22 +125,53 @@ builder.Services.AddHostedService<AlertasSyncWorker>();
 builder.Services.AddHostedService<SlaDailyWorker>();
 
 
+// =====================================================
+// SESION EN REDIS (ticket + sesion por jti) - RFC seguridad de sesion
+// =====================================================
+builder.Services.AddSingleton<IConnectionMultiplexer>(_ =>
+{
+    var redisSettings = _configuration.GetSection("Redis").Get<RedisSettings>() ?? new RedisSettings();
+    var endpoint = string.IsNullOrWhiteSpace(redisSettings.ConnectionString)
+        ? "localhost:6379"
+        : redisSettings.ConnectionString;
+
+    var options = ConfigurationOptions.Parse(endpoint);
+    options.Ssl = redisSettings.Ssl; // true en AWS (ElastiCache con transit_encryption_enabled)
+    options.AbortOnConnectFail = false;
+
+    return ConnectionMultiplexer.Connect(options);
+});
+builder.Services.AddTransient<ISessionService, RedisSessionService>();
+
 // Shared Infrastructure (JWT, etc.)
 builder.Services.AddSharedInfrastructure(_configuration);
 // logService
 builder.Services.AddTransient<ILogService, LogService>();
 
 // ⚠️ CONFIGURACIÓN CORS (DEBE ESTAR ANTES DE AddControllers)
+// Origenes permitidos por configuración (Cors:AllowedOrigins / env var Cors__AllowedOrigins__0),
+// en vez de localhost fijo: en despliegue es el dominio de CloudFront.
+var corsOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>()
+    ?? new[] { "http://localhost:9000" };
+
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowQuasarApp",
         policy =>
         {
-            policy.WithOrigins("http://localhost:9000")
+            policy.WithOrigins(corsOrigins)
                   .AllowAnyHeader()
                   .AllowAnyMethod()
                   .AllowCredentials();
         });
+});
+
+// Detrás de Nginx/NLB: confiar en X-Forwarded-* para que el esquema/IP del cliente sean correctos
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    options.KnownNetworks.Clear();
+    options.KnownProxies.Clear();
 });
 
 builder.Services.AddControllers();
@@ -162,7 +195,15 @@ using (var scope = app.Services.CreateScope())
     try
     {
         var context = services.GetRequiredService<Proyecto1SlaDbContext>();
-        await context.Database.MigrateAsync();
+        if (context.Database.IsRelational())
+        {
+            await context.Database.MigrateAsync();
+        }
+        else
+        {
+            // Proveedor en memoria (pruebas de integración): no hay migraciones que aplicar
+            await context.Database.EnsureCreatedAsync();
+        }
 
         var seeder = services.GetRequiredService<DataSeeder>();
         await seeder.SeedAsync();
@@ -181,13 +222,19 @@ if (app.Environment.IsDevelopment())
     app.MapOpenApi();
 }
 
-app.UseHttpsRedirection();
+// Sin redirección a HTTPS: el contenedor solo recibe HTTP de Nginx/NLB (TLS termina antes, en CloudFront/API Gateway)
+app.UseForwardedHeaders();
 
 app.UseCors("AllowQuasarApp");
 
 app.UseAuthentication();
 app.UseAuthorization();
 
+app.MapGet("/health", () => Results.Ok(new { status = "healthy" }));
+
 app.MapControllers();
 
 await app.RunAsync();
+
+// Necesario para que las pruebas de integración usen WebApplicationFactory<Program>
+public partial class Program { }

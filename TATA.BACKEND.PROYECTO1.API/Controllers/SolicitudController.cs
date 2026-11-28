@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Http;
+﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using TATA.BACKEND.PROYECTO1.CORE.Core.DTOs;
 using TATA.BACKEND.PROYECTO1.CORE.Core.Interfaces;
@@ -10,6 +11,7 @@ namespace TATA.BACKEND.PROYECTO1.API.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
+    [Authorize]
     public class SolicitudController : ControllerBase
     {
         private static readonly ILog log = LogManager.GetLogger(typeof(SolicitudController));
@@ -126,6 +128,12 @@ namespace TATA.BACKEND.PROYECTO1.API.Controllers
 
                 return CreatedAtAction(nameof(GetById), new { id = created.IdSolicitud }, created);
             }
+            catch (ArgumentException ex)
+            {
+                log.Warn($"Create: validación fallida - {ex.Message}");
+                await _logService.RegistrarLogAsync("WARN", "Validación fallida: Create Solicitud", ex.Message, userId);
+                return BadRequest(new { mensaje = ex.Message });
+            }
             catch (Exception ex)
             {
                 log.Error("Error inesperado durante Create", ex);
@@ -178,6 +186,12 @@ namespace TATA.BACKEND.PROYECTO1.API.Controllers
                     $"Solicitud {id} actualizada exitosamente", userId);
 
                 return Ok(updated);
+            }
+            catch (ArgumentException ex)
+            {
+                log.Warn($"Update: validación fallida - {ex.Message}");
+                await _logService.RegistrarLogAsync("WARN", "Validación fallida: Update Solicitud", ex.Message, userId);
+                return BadRequest(new { mensaje = ex.Message });
             }
             catch (Exception ex)
             {

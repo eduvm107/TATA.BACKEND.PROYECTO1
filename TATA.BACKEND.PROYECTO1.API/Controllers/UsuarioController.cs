@@ -4,6 +4,7 @@ using TATA.BACKEND.PROYECTO1.CORE.Core.DTOs;
 using TATA.BACKEND.PROYECTO1.CORE.Core.Interfaces;
 using TATA.BACKEND.PROYECTO1.CORE.Core.Services;
 using log4net;
+using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 
 namespace TATA.BACKEND.PROYECTO1.API.Controllers
@@ -14,14 +15,16 @@ namespace TATA.BACKEND.PROYECTO1.API.Controllers
     public class UsuarioController : ControllerBase
     {
         private static readonly ILog log = LogManager.GetLogger(typeof(UsuarioController));
-        
+
         private readonly IUsuarioService _usuarioService;
         private readonly ILogService _logService;
+        private readonly ISessionService _sessionService;
 
-        public UsuarioController(IUsuarioService usuarioService, ILogService logService)
+        public UsuarioController(IUsuarioService usuarioService, ILogService logService, ISessionService sessionService)
         {
             _usuarioService = usuarioService;
             _logService = logService;
+            _sessionService = sessionService;
             log.Debug("UsuarioController inicializado.");
         }
 
@@ -81,6 +84,50 @@ namespace TATA.BACKEND.PROYECTO1.API.Controllers
                     ex.ToString(), null);
                 return StatusCode(500, new { mensaje = "Error interno del servidor", detalle = ex.Message });
             }
+        }
+
+        /// <summary>
+        /// Cerrar sesión: elimina la sesión de Redis asociada al jti del JWT actual.
+        /// POST /api/usuario/logout
+        /// </summary>
+        [HttpPost("logout")]
+        public async Task<IActionResult> Logout()
+        {
+            var jti = User.FindFirst(JwtRegisteredClaimNames.Jti)?.Value;
+
+            if (!string.IsNullOrEmpty(jti))
+            {
+                await _sessionService.EliminarSesionAsync(jti);
+                log.Info("Logout: sesión eliminada");
+            }
+
+            return Ok(new { message = "Sesión cerrada correctamente" });
+        }
+
+        /// <summary>
+        /// Canjea (un solo uso, TTL 60s) el ticket devuelto por /signin. Debe llamarse
+        /// con el mismo JWT recién emitido en el login.
+        /// POST /api/usuario/confirmar-sesion
+        /// </summary>
+        [HttpPost("confirmar-sesion")]
+        public async Task<IActionResult> ConfirmarSesion([FromBody] ConfirmarSesionDTO dto)
+        {
+            var jti = User.FindFirst(JwtRegisteredClaimNames.Jti)?.Value;
+
+            if (dto == null || string.IsNullOrWhiteSpace(dto.Ticket) || string.IsNullOrEmpty(jti))
+            {
+                return Unauthorized(new { error_code = "TICKET_INVALID" });
+            }
+
+            var jtiDelTicket = await _sessionService.CanjearTicketAsync(dto.Ticket);
+
+            if (jtiDelTicket == null || jtiDelTicket != jti)
+            {
+                log.Warn("ConfirmarSesion: ticket inválido, ya usado, expirado o de otra sesión");
+                return Unauthorized(new { error_code = "TICKET_INVALID" });
+            }
+
+            return Ok(new { message = "Sesión confirmada" });
         }
 
         /// <summary>

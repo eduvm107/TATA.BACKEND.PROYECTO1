@@ -1,0 +1,298 @@
+{
+  "info": {
+    "name": "TATA SLA - Pruebas de API (punto 11)",
+    "description": "8 pruebas de API con aserciones. Correr con Newman.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "01 Login correcto",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status 200', () => pm.response.to.have.status(200));",
+              "const body = pm.response.json();",
+              "pm.test('Devuelve un JWT', () => {",
+              "  pm.expect(body.token).to.be.a('string');",
+              "  pm.expect(body.token.split('.')).to.have.lengthOf(3);",
+              "});",
+              "pm.test('Devuelve permisos', () => pm.expect(body.permisos).to.be.an('array'));",
+              "pm.test('Responde en menos de 2 s', () => pm.expect(pm.response.responseTime).to.be.below(2000));",
+              "pm.collectionVariables.set('token', body.token);"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"{{adminEmail}}\",\n  \"password\": \"{{adminPassword}}\"\n}"
+        },
+        "url": "{{baseUrl}}/api/usuario/signin"
+      }
+    },
+    {
+      "name": "02 Login incorrecto",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status 401', () => pm.response.to.have.status(401));",
+              "pm.test('No devuelve token', () => pm.expect(pm.response.text()).to.not.include('token'));"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"{{adminEmail}}\",\n  \"password\": \"ClaveIncorrecta123!\"\n}"
+        },
+        "url": "{{baseUrl}}/api/usuario/signin"
+      }
+    },
+    {
+      "name": "03 Listar solicitudes con token",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status 200', () => pm.response.to.have.status(200));",
+              "pm.test('Devuelve una lista', () => pm.expect(pm.response.json()).to.be.an('array'));"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          }
+        ],
+        "url": "{{baseUrl}}/api/solicitud"
+      }
+    },
+    {
+      "name": "04 Crear solicitud valida",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status 201', () => pm.response.to.have.status(201));",
+              "const body = pm.response.json();",
+              "pm.test('Devuelve el id creado', () => pm.expect(body.idSolicitud).to.be.a('number'));",
+              "pm.test('Calcula el estado del SLA', () => pm.expect(body.estadoSolicitud).to.be.a('string').and.not.empty);",
+              "pm.collectionVariables.set('idSolicitudCreada', body.idSolicitud);"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"idPersonal\": {{idPersonal}},\n  \"idSla\": {{idSla}},\n  \"idRolRegistro\": {{idRolRegistro}},\n  \"creadoPor\": {{idUsuarioAdmin}},\n  \"fechaSolicitud\": \"2026-11-01\",\n  \"fechaIngreso\": \"2026-11-05\",\n  \"origenDato\": \"POSTMAN\"\n}"
+        },
+        "url": "{{baseUrl}}/api/solicitud"
+      }
+    },
+    {
+      "name": "05 Crear solicitud con fechas invertidas",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status 400', () => pm.response.to.have.status(400));",
+              "pm.test('Explica el error de fechas', () => pm.expect(pm.response.text()).to.include('FechaIngreso'));"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"idPersonal\": {{idPersonal}},\n  \"idSla\": {{idSla}},\n  \"idRolRegistro\": {{idRolRegistro}},\n  \"creadoPor\": {{idUsuarioAdmin}},\n  \"fechaSolicitud\": \"2026-11-10\",\n  \"fechaIngreso\": \"2026-11-01\",\n  \"origenDato\": \"POSTMAN\"\n}"
+        },
+        "url": "{{baseUrl}}/api/solicitud"
+      }
+    },
+    {
+      "name": "06 Endpoint con token alterado",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "exec": [
+              "// Cambiamos el último carácter de la firma: el token deja de ser válido",
+              "const t = pm.collectionVariables.get('token') || 'a.b.c';",
+              "const ultimo = t.slice(-1) === 'A' ? 'B' : 'A';",
+              "pm.collectionVariables.set('tokenAlterado', t.slice(0, -1) + ultimo);"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status 401', () => pm.response.to.have.status(401));"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{tokenAlterado}}"
+          }
+        ],
+        "url": "{{baseUrl}}/api/usuario"
+      }
+    },
+    {
+      "name": "07 Usuario sin rol admin en endpoint de administracion",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "exec": [
+              "pm.sendRequest({",
+              "  url: pm.variables.get('baseUrl') + '/api/usuario/signin',",
+              "  method: 'POST',",
+              "  header: { 'Content-Type': 'application/json' },",
+              "  body: { mode: 'raw', raw: JSON.stringify({",
+              "    email: pm.variables.get('noAdminEmail'),",
+              "    password: pm.variables.get('noAdminPassword')",
+              "  }) }",
+              "}, (err, res) => {",
+              "  if (!err && res.code === 200) pm.collectionVariables.set('tokenNoAdmin', res.json().token);",
+              "});"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Se pudo iniciar sesión como no-admin', () => pm.expect(pm.collectionVariables.get('tokenNoAdmin')).to.be.a('string'));",
+              "pm.test('Status 403', () => pm.response.to.have.status(403));"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{tokenNoAdmin}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"idPersonal\": 1,\n  \"username\": \"postman.prueba\",\n  \"idRolSistema\": 2\n}"
+        },
+        "url": "{{baseUrl}}/api/usuario/vincular-personal"
+      }
+    },
+    {
+      "name": "08 Recuperar contrasena con correo inexistente",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status 200 (misma respuesta exista o no)', () => pm.response.to.have.status(200));",
+              "const msg = (pm.response.json().message || '').toLowerCase();",
+              "pm.test('Mensaje genérico', () => pm.expect(msg).to.include('si el email existe'));",
+              "pm.test('No revela si el correo existe', () => {",
+              "  pm.expect(msg).to.not.include('no existe');",
+              "  pm.expect(msg).to.not.include('no encontrado');",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"no.existe.{{$timestamp}}@ejemplo.com\"\n}"
+        },
+        "url": "{{baseUrl}}/api/usuario/solicitar-recuperacion"
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "token",
+      "value": ""
+    },
+    {
+      "key": "tokenAlterado",
+      "value": ""
+    },
+    {
+      "key": "tokenNoAdmin",
+      "value": ""
+    },
+    {
+      "key": "idSolicitudCreada",
+      "value": ""
+    }
+  ]
+}

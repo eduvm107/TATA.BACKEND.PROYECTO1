@@ -18,13 +18,16 @@ namespace TATA.BACKEND.PROYECTO1.CORE.Infrastructure.Shared
             _settings = settings.Value;
         }
 
-        public string GenerateJWToken(Usuario usuario)
+        public (string Token, string Jti) GenerateJWToken(Usuario usuario)
         {
             var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_settings.SecretKey));
             var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
 
             // ⚠️ Obtener correo del Personal vinculado
             var email = usuario.PersonalNavigation?.CorreoCorporativo ?? usuario.Username;
+
+            // jti: identifica este token de forma unica (clave de la sesion en Redis)
+            var jti = Guid.NewGuid().ToString();
 
             var claims = new[]
             {
@@ -33,7 +36,8 @@ namespace TATA.BACKEND.PROYECTO1.CORE.Infrastructure.Shared
                 new Claim(ClaimTypes.Role, usuario.IdRolSistema.ToString()),
                 new Claim(ClaimTypes.NameIdentifier, usuario.IdUsuario.ToString()),
                 //new Claim("UserId", usuario.IdUsuario.ToString()),
-                new Claim("IdPersonal", usuario.IdPersonal?.ToString() ?? "0") // ⚠️ Agregar IdPersonal al token
+                new Claim("IdPersonal", usuario.IdPersonal?.ToString() ?? "0"), // ⚠️ Agregar IdPersonal al token
+                new Claim(JwtRegisteredClaimNames.Jti, jti)
             };
 
             var token = new JwtSecurityToken(
@@ -44,7 +48,7 @@ namespace TATA.BACKEND.PROYECTO1.CORE.Infrastructure.Shared
                 signingCredentials: creds
             );
 
-            return new JwtSecurityTokenHandler().WriteToken(token);
+            return (new JwtSecurityTokenHandler().WriteToken(token), jti);
         }
     }
 }
