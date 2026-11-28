@@ -1,5 +1,6 @@
 using log4net; // Necesario para LogManager
 using log4net.Config; // Necesario para XmlConfigurator
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
 using StackExchange.Redis;
 using System.Reflection; // Necesario para Assembly
@@ -148,16 +149,29 @@ builder.Services.AddSharedInfrastructure(_configuration);
 builder.Services.AddTransient<ILogService, LogService>();
 
 // ⚠️ CONFIGURACIÓN CORS (DEBE ESTAR ANTES DE AddControllers)
+// Origenes permitidos por configuración (Cors:AllowedOrigins / env var Cors__AllowedOrigins__0),
+// en vez de localhost fijo: en despliegue es el dominio de CloudFront.
+var corsOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>()
+    ?? new[] { "http://localhost:9000" };
+
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowQuasarApp",
         policy =>
         {
-            policy.WithOrigins("http://localhost:9000")
+            policy.WithOrigins(corsOrigins)
                   .AllowAnyHeader()
                   .AllowAnyMethod()
                   .AllowCredentials();
         });
+});
+
+// Detrás de Nginx/NLB: confiar en X-Forwarded-* para que el esquema/IP del cliente sean correctos
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    options.KnownNetworks.Clear();
+    options.KnownProxies.Clear();
 });
 
 builder.Services.AddControllers();
@@ -200,12 +214,15 @@ if (app.Environment.IsDevelopment())
     app.MapOpenApi();
 }
 
-app.UseHttpsRedirection();
+// Sin redirección a HTTPS: el contenedor solo recibe HTTP de Nginx/NLB (TLS termina antes, en CloudFront/API Gateway)
+app.UseForwardedHeaders();
 
 app.UseCors("AllowQuasarApp");
 
 app.UseAuthentication();
 app.UseAuthorization();
+
+app.MapGet("/health", () => Results.Ok(new { status = "healthy" }));
 
 app.MapControllers();
 
